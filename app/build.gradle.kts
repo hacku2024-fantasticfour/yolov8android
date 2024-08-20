@@ -1,6 +1,8 @@
 plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.jetbrainsKotlinAndroid)
+
+    id("kotlin-kapt")
 }
 
 android {
@@ -38,6 +40,8 @@ android {
     }
     buildFeatures {
         compose = true
+        viewBinding = true
+        dataBinding = true
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.1"
@@ -61,6 +65,10 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation("org.tensorflow:tensorflow-lite:2.14.0")
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
+    implementation(libs.androidx.appcompat)
+    implementation(libs.material)
+    implementation(libs.androidx.activity)
+    implementation(libs.androidx.constraintlayout)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -68,4 +76,12 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+
+    // add camera libraries
+    implementation ("androidx.camera:camera-core:1.1.0-beta01")
+    implementation ("androidx.camera:camera-camera2:1.1.0-beta01")
+    implementation ("androidx.camera:camera-lifecycle:1.1.0-beta01")
+    implementation ("androidx.camera:camera-video:1.1.0-beta01")
+    implementation ("androidx.camera:camera-view:1.1.0-beta01" )
+    implementation ("androidx.camera:camera-extensions:1.1.0-beta01")
 }

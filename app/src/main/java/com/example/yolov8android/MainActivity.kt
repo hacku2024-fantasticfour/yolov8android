@@ -1,105 +1,191 @@
 package com.example.yolov8android
 
+import android.Manifest
+import android.content.ContentValues
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import com.example.yolov8android.ui.theme.Yolov8androidTheme
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.RectF
-import android.graphics.Typeface
+import android.provider.MediaStore
+import androidx.appcompat.app.AppCompatActivity
+import androidx.camera.core.ImageCapture
+import androidx.camera.video.Recorder
+import androidx.camera.video.Recording
+import androidx.camera.video.VideoCapture
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import com.example.yolov8android.databinding.ActivityMainBinding
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import android.widget.Toast
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.core.Preview
+import androidx.camera.core.CameraSelector
 import android.util.Log
-import androidx.compose.foundation.Image
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.asImageBitmap
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import androidx.camera.core.ImageCaptureException
+import java.text.SimpleDateFormat
+import java.util.Locale
 
-class MainActivity : ComponentActivity(), Detector.DetectorListener {
-    private var image by mutableStateOf<Bitmap?>(null)
-    private lateinit var detector: Detector
-    private val MODEL_PATH = "yolov8s_float32.tflite"
-    private val LABELS_PATH = "labels.txt"
-    private val processingScope = CoroutineScope(Dispatchers.IO)  // IOスレッドで実行
+typealias LumaListener = (luma: Double) -> Unit
+
+class MainActivity : AppCompatActivity() {
+    private lateinit var viewBinding: ActivityMainBinding
+
+    private var imageCapture: ImageCapture? = null
+
+    private var videoCapture: VideoCapture<Recorder>? = null
+    private var recording: Recording? = null
+
+    private lateinit var cameraExecutor: ExecutorService
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        image = BitmapFactory.decodeResource(resources, R.drawable.sample)
-        detector = Detector(baseContext, MODEL_PATH, LABELS_PATH, this)
-        detector.setup()
-        image?.let {
-            detector.detect(it)
+        viewBinding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(viewBinding.root)
+
+        // Request camera permissions
+        if (allPermissionsGranted()) {
+            startCamera()
+        } else {
+            ActivityCompat.requestPermissions(
+                this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS)
         }
-        setContent {
-            Yolov8androidTheme {
-                // A surface container using the 'background' color from the theme
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    MyImage(bitmap = image)
+
+        // Set up the listeners for take photo and video capture buttons
+        viewBinding.imageCaptureButton.setOnClickListener { takePhoto() }
+        viewBinding.videoCaptureButton.setOnClickListener { captureVideo() }
+
+        cameraExecutor = Executors.newSingleThreadExecutor()
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray
+    ) {
+        if (requestCode == REQUEST_CODE_PERMISSIONS) {
+            if (allPermissionsGranted()) {
+                startCamera()
+            } else {
+                Toast.makeText(
+                    this,
+                    "Permissions not granted by the user.",
+                    Toast.LENGTH_SHORT
+                ).show()
+                finish()
+            }
+        }
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+    }
+
+    private fun takePhoto() {
+        // Get a stable reference of the modifiable image capture use case
+        val imageCapture = imageCapture ?: return   // カメラ画像の取得
+
+        // Create time stamped name and MediaStore entry.
+        val name = SimpleDateFormat(FILENAME_FORMAT, Locale.US)
+            .format(System.currentTimeMillis())     // ファイル名
+        val contentValues = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, name)     // ファイル名設定
+            put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")    // ファイルのタイプ設定
+            if(Build.VERSION.SDK_INT > Build.VERSION_CODES.P) {
+                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CameraX-Image")    // 保存場所指定
+            }
+        }
+
+        // Create output options object which contains file + metadata
+        val outputOptions = ImageCapture.OutputFileOptions      // 写真の出力オプション作成
+            .Builder(contentResolver,
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                contentValues)
+            .build()
+
+        // Set up image capture listener, which is triggered after photo has
+        // been taken
+        imageCapture.takePicture(
+            outputOptions,      // 保存場所指定
+            ContextCompat.getMainExecutor(this),    // UI更新
+            object : ImageCapture.OnImageSavedCallback {    // コールバック
+                override fun onError(exc: ImageCaptureException) {  // error発生時
+                    Log.e(TAG, "Photo capture failed: ${exc.message}", exc)
+                }
+
+                override fun onImageSaved(output: ImageCapture.OutputFileResults){   // 正常時
+                    val savedUri = output.savedUri
+                    val msg = "Photo capture succeeded: $savedUri"
+                    Toast.makeText(baseContext, msg, Toast.LENGTH_SHORT).show()
+                    Log.d(TAG, msg)
+
+                    val intent = Intent(this@MainActivity, MainActivity2::class.java).apply {
+                        putExtra("image_uri", savedUri.toString())
+                    }
+                    startActivity(intent)
                 }
             }
-        }
+        )
     }
 
-    override fun onDetect(boundingBoxes: List<BoundingBox>) {
-        image?.let { bmp ->
-            processingScope.launch {
-                val updatedBitmap = drawBoundingBoxes(bmp, boundingBoxes)
-                image = updatedBitmap
+    private fun captureVideo() {}
+
+    private fun startCamera() {
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
+
+        cameraProviderFuture.addListener({
+            // Used to bind the lifecycle of cameras to the lifecycle owner
+            val cameraProvider: ProcessCameraProvider = cameraProviderFuture.get()
+
+            // Preview
+            val preview = Preview.Builder()
+                .build()
+                .also {
+                    it.setSurfaceProvider(viewBinding.viewFinder.surfaceProvider)
+                }
+
+            imageCapture = ImageCapture.Builder()
+                .build()
+
+            // Select back camera as a default
+            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+
+            try {
+                // Unbind use cases before rebinding
+                cameraProvider.unbindAll()
+
+                // Bind use cases to camera
+                cameraProvider.bindToLifecycle(
+                    this, cameraSelector, preview, imageCapture)
+
+            } catch(exc: Exception) {
+                Log.e(TAG, "Use case binding failed", exc)
             }
-        }
+
+        }, ContextCompat.getMainExecutor(this))
     }
 
-    override fun onEmptyDetect() {
-        Log.i("empty", "empty")
+
+    private fun allPermissionsGranted() = REQUIRED_PERMISSIONS.all {
+        ContextCompat.checkSelfPermission(
+            baseContext, it) == PackageManager.PERMISSION_GRANTED
     }
 
-    fun drawBoundingBoxes(bitmap: Bitmap, boxes: List<BoundingBox>): Bitmap {
-        val mutableBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
-        val canvas = Canvas(mutableBitmap)
-        val paint = Paint().apply {
-            color = Color.MAGENTA
-            style = Paint.Style.STROKE
-            strokeWidth = 8f
-        }
-        val textPaint = Paint().apply {
-            color = Color.rgb(0,255,0)
-            textSize = 80f
-            typeface = Typeface.DEFAULT_BOLD
-        }
+    override fun onDestroy() {
+        super.onDestroy()
+        cameraExecutor.shutdown()
+    }
 
-        for (box in boxes) {
-            val rect = RectF(
-                box.x1 * mutableBitmap.width,
-                box.y1 * mutableBitmap.height,
-                box.x2 * mutableBitmap.width,
-                box.y2 * mutableBitmap.height
-            )
-            canvas.drawRect(rect, paint)
-            canvas.drawText(box.clsName, rect.left, rect.bottom, textPaint)
-        }
-
-        return mutableBitmap
+    companion object {
+        private const val TAG = "yolov8android"
+        private const val FILENAME_FORMAT = "yyyy-MM-dd-HH-mm-ss-SSS"
+        private const val REQUEST_CODE_PERMISSIONS = 10
+        private val REQUIRED_PERMISSIONS =
+            mutableListOf (
+                Manifest.permission.CAMERA,
+                Manifest.permission.RECORD_AUDIO
+            ).apply {
+                if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
+                    add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                }
+            }.toTypedArray()
     }
 }
-
-@Composable
-fun MyImage(bitmap: Bitmap?) {
-    bitmap?.let {
-        Image(bitmap = it.asImageBitmap(), contentDescription = "Description of the image")
-    }
-}
-
