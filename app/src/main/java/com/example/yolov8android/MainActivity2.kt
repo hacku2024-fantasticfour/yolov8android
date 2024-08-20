@@ -50,8 +50,6 @@ class MainActivity2 : ComponentActivity(), Detector.DetectorListener {
             }
         }
 
-//        image = BitmapFactory.decodeResource(resources, R.drawable.sample)
-
         setContent {
             Yolov8androidTheme {
                 // A surface container using the 'background' color from the theme

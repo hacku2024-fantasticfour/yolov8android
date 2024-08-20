@@ -4,15 +4,15 @@ import android.Manifest
 import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
+//import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.ImageCapture
-import androidx.camera.video.Recorder
-import androidx.camera.video.Recording
-import androidx.camera.video.VideoCapture
+//import androidx.camera.video.Recorder
+//import androidx.camera.video.Recording
+//import androidx.camera.video.VideoCapture
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.yolov8android.databinding.ActivityMainBinding
@@ -27,15 +27,15 @@ import androidx.camera.core.ImageCaptureException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-typealias LumaListener = (luma: Double) -> Unit
+//typealias LumaListener = (luma: Double) -> Unit
 
 class MainActivity : AppCompatActivity() {
     private lateinit var viewBinding: ActivityMainBinding
 
     private var imageCapture: ImageCapture? = null
 
-    private var videoCapture: VideoCapture<Recorder>? = null
-    private var recording: Recording? = null
+//    private var videoCapture: VideoCapture<Recorder>? = null
+//    private var recording: Recording? = null
 
     private lateinit var cameraExecutor: ExecutorService
 
@@ -54,7 +54,7 @@ class MainActivity : AppCompatActivity() {
 
         // Set up the listeners for take photo and video capture buttons
         viewBinding.imageCaptureButton.setOnClickListener { takePhoto() }
-        viewBinding.videoCaptureButton.setOnClickListener { captureVideo() }
+//        viewBinding.videoCaptureButton.setOnClickListener { captureVideo() }
 
         cameraExecutor = Executors.newSingleThreadExecutor()
     }
@@ -126,7 +126,7 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
-    private fun captureVideo() {}
+//    private fun captureVideo() {}
 
     private fun startCamera() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
